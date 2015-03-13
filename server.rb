@@ -8,6 +8,8 @@ require 'bundler/setup'
 require 'sinatra'
 require 'sinatra/linkeddata'
 require 'sinatra/cross_origin'
+require 'redis'
+require 'active_support'
 
 require path_to('lib/archivist')
 
@@ -17,7 +19,30 @@ helpers do
   end
 
   def find_resource
+  end
 
+  def redis
+    @redis ||= Redis.new
+  end
+
+  def remember_thing
+    data = request.body.read
+    JSON.parse(data)
+    redis.rpush('to_remember', data)
+  end
+
+  def get_top_of_queue
+    JSON.parse redis.lpop('to_remember')
+  end
+
+  def update_resource
+    data = params[:data]
+
+    properties = data.except('url').keys.each_with_object({}) do |key, hash|
+      hash[data[key]['predicate']] = data[key]['object']
+    end
+
+    redis.set(data['url']['object'], properties.to_json) == "OK"
   end
 end
 
@@ -33,69 +58,102 @@ configure do
 end
 
 get '/' do
-  "landing page goes here"
+  haml :error
 end
 
-get '*' do
-  repo = settings.repository
+get '/queue' do
+  @first_object = get_top_of_queue
 
-  unless repo
-    error_response 404
-  end
+  haml :queue
+end
 
-  result = find_resource
+post '/queue' do
+  successful = update_resource
 
-  if result
-    result
+  if successful
+    "It worked"
   else
-    error_response 404
+    status 500
+    "It didn't"
   end
 end
 
-post '*' do
-  repo = settings.repository
+post '/remember' do
+  successful = remember_thing
 
-  unless repo
-    error_response 404
-  end
+  content_type :json
 
-  result = create_resource
-
-  if result
-    result
+  if successful
+    {success: 'true'}.to_json
   else
-    error_response 422
+    status 500
+    {error: 'something went wrong'}.to_json
   end
 end
 
-put '*' do
-  repo = settings.repository
+# get '*' do
+#   repo = settings.repository
 
-  unless repo
-    error_response 404
-  end
+#   unless repo
+#     error_response 404
+#   end
 
-  result = update_resource
+#   result = find_resource
 
-  if result
-    result
-  else
-    error_response 404
-  end
-end
+#   if result
+#     result
+#   else
+#     error_response 404
+#   end
+# end
 
-delete '*' do
-  repo = settings.repository
+# post '*' do
+#   repo = settings.repository
 
-  unless repo
-    error_response 404
-  end
+#   unless repo
+#     error_response 404
+#   end
 
-  result = delete_resource
+#   result = create_resource
 
-  if result
-    result
-  else
-    error_response 404
-  end
-end
+#   if result
+#     result
+#   else
+#     error_response 422
+#   end
+# end
+
+# put '*' do
+#   repo = settings.repository
+
+#   unless repo
+#     error_response 404
+#   end
+
+#   result = update_resource
+
+#   if result
+#     result
+#   else
+#     error_response 404
+#   end
+# end
+
+# delete '*' do
+#   repo = settings.repository
+
+#   unless repo
+#     error_response 404
+#   end
+
+#   result = delete_resource
+
+#   if result
+#     result
+#   else
+#     error_response 404
+#   end
+# end
+
+
+

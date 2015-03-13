@@ -1,0 +1,11 @@
+%h1 Queue
+
+%div{:class => 'queue_items'}
+  %form{method: 'post'}
+    - @first_object.keys.each do |k|
+      %input{name: "data[#{k}][predicate]", value: k}
+      %input{name: "data[#{k}][object]", value: @first_object[k]}
+    %input{type: 'submit'}
+
+%div{:class => 'footer'}
+  %p footer
